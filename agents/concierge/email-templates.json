@@ -1,0 +1,25 @@
+{
+  "analysis_complete": {
+    "subject": "✅ Your Quorum Analysis Is Ready — Download Your Excel Workbook",
+    "preview_text": "Your professional Excel workbook is ready for download from Quorum.",
+    "body": "Hi there,\n\nGreat news! Your Quorum virtual firm has completed the analysis of your data.\n\n✅ Your Professional Excel Workbook is ready\n\nYour workbook includes:\n• Cleaned and standardized data sheet\n• Full analysis with patterns and key metrics\n• Complete audit trail with every correction logged\n• Manager's decision memo with recommendations\n\nDownload your workbook here:\n{{downloadUrl}}\n\nOr visit your results dashboard:\n{{resultsUrl}}\n\nSession: {{fileName}} ({{sessionId}})\n\nThank you for hiring Quorum. If you have any questions about your analysis, simply reply to this email — our concierge team is here to help.\n\n— The Quorum Team"
+  },
+
+  "analysis_complete_fallback": {
+    "subject": "Your Quorum Analysis Results Are Ready",
+    "preview_text": "Your analysis workbook is ready to download.",
+    "body": "Hi there,\n\nYour Quorum analysis is complete. Your professional Excel workbook is ready.\n\nDownload: {{downloadUrl}}\nSession: {{fileName}}\n\n— The Quorum Team"
+  },
+
+  "welcome_preview": {
+    "subject": "🔍 Your Free Quorum Data Preview Is Ready",
+    "preview_text": "View your free data profile from Quorum.",
+    "body": "Hi there,\n\nYour free data preview is ready! Our Researcher has profiled {{fileName}} and we've identified the schema, statistics, and any potential issues.\n\nView your preview here:\n{{previewUrl}}\n\nLike what you see? Hire the full firm for $50 and get:\n• Deep data cleaning with full audit trail\n• Complete analysis with key metrics and patterns\n• Professional Excel workbook delivered to your inbox\n\n— The Quorum Team"
+  },
+
+  "payment_confirmation": {
+    "subject": "💰 Quorum Firm Hire Confirmed — $50",
+    "preview_text": "Thank you for hiring Quorum. Your analysis is now in progress.",
+    "body": "Hi there,\n\nThank you for hiring Quorum! Your payment of $50 has been received.\n\nOur team is now working on your data:\n🔍 Researcher — checking your data profile\n📊 Analyst — finding patterns and anomalies\n✅ Auditor — validating and cleaning your data\n📋 Manager — building your final deliverables\n\nYou'll receive an email from us as soon as your Excel workbook is ready.\n\nTrack progress here:\n{{resultsUrl}}\n\nSession: {{fileName}} ({{sessionId}})\n\n— The Quorum Team"
+  }
+}

@@ -1,0 +1,136 @@
+{
+  "welcome": {
+    "headline": "Welcome to Quorum — Your Virtual Accounting & Analytics Firm",
+    "subheadline": "Upload your data and we'll do the rest. Our team of specialized agents works together to transform messy data into professional, trustworthy analysis.",
+    "cta": "Upload Your Data",
+    "agents": [
+      { "name": "Researcher", "emoji": "🔍", "role": "Data Ingestion & Profiling" },
+      { "name": "Analyst", "emoji": "📊", "role": "Pattern Recognition & Anomaly Detection" },
+      { "name": "Auditor", "emoji": "✅", "role": "Validation, Dedup & Audit Trail" },
+      { "name": "Manager", "emoji": "📋", "role": "Synthesis, Adjudication & Excel Delivery" }
+    ]
+  },
+
+  "progress": {
+    "uploading": {
+      "title": "Processing Your File",
+      "message": "Our Researcher is reading your file...",
+      "detail": "We support CSV, XLSX, and XLS formats up to 50MB.",
+      "emoji": "📄"
+    },
+    "profiling": {
+      "title": "Profiling Your Data",
+      "message": "Our Researcher is profiling your data — analyzing schema, statistics, and patterns.",
+      "detail": "This usually takes just a moment. Refresh the page to check.",
+      "emoji": "🔍"
+    },
+    "preview_ready": {
+      "title": "Free Preview Ready",
+      "message": "Your data profile is complete. Review the findings at no cost.",
+      "detail": "See schema overview, column statistics, null analysis, and potential issues.",
+      "emoji": "📋",
+      "cta": "View Preview"
+    },
+    "analysis_started": {
+      "title": "Analysis In Progress",
+      "message": "The firm has been hired! Our agents are working through your data now.",
+      "emoji": "🏗️"
+    },
+    "researcher_done": {
+      "title": "Researcher Complete",
+      "message": "Researcher has finished ingesting and profiling your data.",
+      "detail": "Raw data loaded, schema extracted, reference data pulled.",
+      "emoji": "🔍"
+    },
+    "analyst_working": {
+      "title": "Analyst at Work",
+      "message": "Analyst is finding patterns and detecting anomalies in your data.",
+      "detail": "Performing exploratory data analysis, computing metrics and KPIs.",
+      "emoji": "📊"
+    },
+    "analyst_done": {
+      "title": "Analyst Complete",
+      "message": "Analyst has finished pattern recognition and anomaly detection.",
+      "detail": "Key metrics calculated, outliers identified, hypotheses generated.",
+      "emoji": "📊"
+    },
+    "auditor_working": {
+      "title": "Auditor Reviewing",
+      "message": "Auditor is validating and cleaning the data.",
+      "detail": "De-duplication, standardization, reconciliation in progress.",
+      "emoji": "✅"
+    },
+    "auditor_done": {
+      "title": "Auditor Complete",
+      "message": "Auditor has finished validation and cleaning.",
+      "detail": "Corrections logged with full audit trail. Everything is reconcilable.",
+      "emoji": "✅"
+    },
+    "manager_working": {
+      "title": "Manager Synthesizing",
+      "message": "Manager is adjudicating findings and building your deliverable.",
+      "detail": "Resolving conflicts between Analyst and Auditor, preparing the Excel workbook.",
+      "emoji": "📋"
+    },
+    "manager_done": {
+      "title": "Manager Complete",
+      "message": "Your final deliverables are ready.",
+      "detail": "Decision memo written, professional Excel workbook generated.",
+      "emoji": "📋"
+    },
+    "workbook_ready": {
+      "title": "Analysis Complete!",
+      "message": "Your professional Excel workbook is ready for download.",
+      "detail": "Contains: cleaned data sheet, full analysis, audit trail, and decision memo.",
+      "emoji": "📑",
+      "cta": "Download Workbook (.xlsx)"
+    }
+  },
+
+  "result_presentation": {
+    "all_complete": {
+      "badge": "Analysis Complete",
+      "headline": "Your Results Are Ready",
+      "subheadline": "All agents have completed their work. Your deliverables are below."
+    },
+    "in_progress": {
+      "badge": "Analysis in Progress",
+      "headline": "The Firm Is Working",
+      "subheadline": "Our team of agents is processing your data. Progress is shown below."
+    },
+    "section_titles": {
+      "profile": "Schema Overview",
+      "analysis": "Analysis Results",
+      "audit": "Audit Trail",
+      "decision_memo": "Manager's Summary",
+      "download": "Download Your Workbook"
+    }
+  },
+
+  "errors": {
+    "session_not_found": {
+      "headline": "Session Not Found",
+      "message": "This session doesn't exist or has expired.",
+      "emoji": "🔍",
+      "cta": "Upload New Data"
+    },
+    "workbook_not_ready": {
+      "headline": "Workbook Not Ready",
+      "message": "The workbook hasn't been generated yet. Please wait for all agents to complete their work.",
+      "emoji": "⏳"
+    },
+    "upload_failed": {
+      "headline": "Upload Failed",
+      "message": "We couldn't process your file. Please try again.",
+      "detail": "Supported formats: .csv, .xlsx, .xls — up to 50MB.",
+      "emoji": "❌",
+      "cta": "Try Again"
+    },
+    "payment_failed": {
+      "headline": "Payment Failed",
+      "message": "The transaction was not completed. No charges were made.",
+      "emoji": "💳",
+      "cta": "Try Again"
+    }
+  }
+}
