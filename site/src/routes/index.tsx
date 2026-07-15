@@ -7,7 +7,7 @@ export const Route = createFileRoute("/")({
 const services = [
   {
     title: "Data Profiling & Discovery",
-    desc: "We ingest your raw data — CSV or Excel — and produce a comprehensive profile: schema, statistics, null analysis, and anomaly detection. No commitment required.",
+    desc: "We ingest your raw data — CSV, Excel, or PDF — and produce a comprehensive profile: schema, statistics, null analysis, and anomaly detection. No commitment required.",
     agent: "Researcher",
     icon: "📋",
   },

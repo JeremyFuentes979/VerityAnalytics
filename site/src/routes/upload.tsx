@@ -18,7 +18,7 @@ const uploadFile = createServerFn({ method: "POST" })
     await fs.mkdir(sessionDir, { recursive: true });
 
     const buffer = Buffer.from(fileContent, "base64");
-    const ext = fileName.endsWith(".csv") ? "csv" : "xlsx";
+    const ext = fileName.endsWith(".csv") ? "csv" : fileName.endsWith(".pdf") ? "pdf" : "xlsx";
     await fs.writeFile(`${sessionDir}/input.${ext}`, buffer);
     await fs.writeFile(
       `${sessionDir}/session.json`,
@@ -44,8 +44,8 @@ function Upload() {
     setUploading(true);
 
     const ext = f.name.split(".").pop()?.toLowerCase();
-    if (!ext || !["csv", "xlsx", "xls"].includes(ext)) {
-      setError("Accepted formats: .csv, .xlsx, .xls");
+    if (!ext || !["csv", "xlsx", "xls", "pdf"].includes(ext)) {
+      setError("Accepted formats: .csv, .xlsx, .xls, .pdf");
       setUploading(false);
       return;
     }
@@ -75,7 +75,7 @@ function Upload() {
           Submit Your Data
         </h1>
         <p className="mt-2 text-navy-500">
-          Drop a CSV or Excel file below. Our Researcher will produce a free data profile — no charge, no commitment.
+          Drop a CSV, Excel, or PDF file below. Our Researcher will produce a free data profile — no charge, no commitment.
         </p>
       </div>
 
@@ -100,14 +100,14 @@ function Upload() {
           ) : (
             <>
               <p className="font-medium text-navy">Drag a file here or click to browse</p>
-              <p className="text-xs text-navy-400">Supports .csv, .xlsx, .xls — maximum 50 MB</p>
+              <p className="text-xs text-navy-400">Supports .csv, .xlsx, .xls, .pdf — maximum 50 MB</p>
             </>
           )}
         </div>
         <input
           ref={fileInputRef}
           type="file"
-          accept=".csv,.xlsx,.xls"
+          accept=".csv,.xlsx,.xls,.pdf"
           className="hidden"
           onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); }}
         />
