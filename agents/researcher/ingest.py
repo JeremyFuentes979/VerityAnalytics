@@ -4,6 +4,41 @@ import os
 import sys
 from datetime import datetime
 
+try:
+    import pdfplumber
+    HAS_PDFPLUMBER = True
+except ImportError:
+    HAS_PDFPLUMBER = False
+
+
+def ingest_pdf(file_path):
+    """Extract text from a PDF and return a DataFrame with a single 'text' column per page."""
+    if not HAS_PDFPLUMBER:
+        return {"error": "pdfplumber is not installed. Run: pip install pdfplumber"}
+    
+    rows = []
+    with pdfplumber.open(file_path) as pdf:
+        for i, page in enumerate(pdf.pages):
+            text = page.extract_text() or ""
+            rows.append({"page": i + 1, "text": text.strip()})
+            # Try to extract tables if present
+            tables = page.extract_tables()
+            for t_idx, table in enumerate(tables):
+                if table:
+                    headers = table[0] if len(table) > 0 else []
+                    for r_idx, row in enumerate(table[1:], 1):
+                        record = {"page": i + 1, "table": t_idx + 1, "row": r_idx}
+                        for h_idx, cell in enumerate(row):
+                            col_name = headers[h_idx] if h_idx < len(headers) else f"col_{h_idx}"
+                            record[col_name] = cell
+                        rows.append(record)
+    
+    if not rows:
+        rows.append({"page": 1, "text": "(empty PDF)"})
+    
+    df = pd.DataFrame(rows)
+    return df
+
 def profile_dataframe(df):
     profile = {
         "row_count": len(df),
@@ -49,10 +84,16 @@ def ingest_file(file_path):
             df = pd.read_csv(file_path)
         elif ext in ['.xlsx', '.xls']:
             df = pd.read_excel(file_path)
+        elif ext == '.pdf':
+            result = ingest_pdf(file_path)
+            if isinstance(result, dict) and "error" in result:
+                return result
+            df = result
         else:
             return {"error": f"Unsupported file extension: {ext}"}
         
         profile = profile_dataframe(df)
+        profile["source_type"] = ext
         return {"status": "success", "profile": profile, "file_path": file_path}
     except Exception as e:
         return {"status": "error", "message": str(e)}
@@ -71,7 +112,7 @@ def main():
     results = []
     if os.path.isdir(input_path):
         for f in os.listdir(input_path):
-            if f.endswith(('.csv', '.xlsx', '.xls')):
+            if f.endswith(('.csv', '.xlsx', '.xls', '.pdf')):
                 full_path = os.path.join(input_path, f)
                 print(f"Processing {full_path}...")
                 results.append(ingest_file(full_path))

@@ -16,6 +16,8 @@ def run_sql(sql):
 def run_session(session_id):
     session_dir = f"/home/team/shared/sessions/{session_id}"
     input_file = os.path.join(session_dir, "input.csv")
+    input_pdf = os.path.join(session_dir, "input.pdf")
+    input_xlsx = os.path.join(session_dir, "input.xlsx")
     profile_output = os.path.join(session_dir, "profile.json")
     
     if not os.path.exists(session_dir):
@@ -24,9 +26,18 @@ def run_session(session_id):
     print(f"Processing session {session_id}...")
     run_sql(f"UPDATE sessions SET status = 'processing' WHERE id = '{session_id}'")
 
+    # Find the input file (check csv, then pdf, then xlsx)
+    input_path = None
     if os.path.exists(input_file):
-        print(f"Ingesting {input_file}...")
-        result = ingest.ingest_file(input_file)
+        input_path = input_file
+    elif os.path.exists(input_pdf):
+        input_path = input_pdf
+    elif os.path.exists(input_xlsx):
+        input_path = input_xlsx
+
+    if input_path:
+        print(f"Ingesting {input_path}...")
+        result = ingest.ingest_file(input_path)
         if result.get("status") == "success":
             with open(profile_output, 'w') as out_f:
                 json.dump(result["profile"], out_f, indent=2)
@@ -47,7 +58,7 @@ def run_session(session_id):
         print(f"Scanning {input_dir} for files...")
         if os.path.exists(input_dir):
             for f in os.listdir(input_dir):
-                if f.endswith(('.csv', '.xlsx', '.xls')):
+                if f.endswith(('.csv', '.xlsx', '.xls', '.pdf')):
                     file_path = os.path.join(input_dir, f)
                     print(f"Ingesting {file_path}...")
                     result = ingest.ingest_file(file_path)
