@@ -17,7 +17,7 @@ const getSession = createServerFn({ method: "GET" })
     }
   });
 
-export const Route = createFileRoute("/preview/")({
+export const Route = createFileRoute("/preview/$sessionId")({
   loader: async ({ params }) => getSession({ data: params.sessionId }),
   component: Preview,
 });

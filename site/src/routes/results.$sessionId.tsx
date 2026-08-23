@@ -30,7 +30,7 @@ const triggerWorkflow = createServerFn({ method: "POST" })
     return { started: true };
   });
 
-export const Route = createFileRoute("/results/")({
+export const Route = createFileRoute("/results/$sessionId")({
   loader: async ({ params }) => getStatus({ data: params.sessionId }),
   component: Results,
   staleTime: 5_000,
