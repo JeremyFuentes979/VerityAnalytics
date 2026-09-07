@@ -5,6 +5,18 @@ import subprocess
 import ingest
 import reference_data
 
+
+def repo_root():
+    return os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+
+
+def default_sessions_dir():
+    env_value = os.environ.get('QUORUM_SESSIONS_DIR')
+    if env_value:
+        return env_value
+    return os.path.join(repo_root(), 'sessions')
+
+
 def run_sql(sql):
     try:
         result = subprocess.check_output(["team-db", sql], stderr=subprocess.STDOUT)
@@ -14,7 +26,7 @@ def run_sql(sql):
         return None
 
 def run_session(session_id):
-    session_dir = f"/home/team/shared/sessions/{session_id}"
+    session_dir = os.path.join(default_sessions_dir(), session_id)
     input_file = os.path.join(session_dir, "input.csv")
     input_pdf = os.path.join(session_dir, "input.pdf")
     input_xlsx = os.path.join(session_dir, "input.xlsx")

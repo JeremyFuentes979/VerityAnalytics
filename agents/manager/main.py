@@ -27,6 +27,18 @@ import logging
 import os
 import sys
 
+
+def repo_root():
+    return os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+
+
+def default_sessions_dir():
+    env_value = os.environ.get('QUORUM_SESSIONS_DIR')
+    if env_value:
+        return env_value
+    return os.path.join(repo_root(), 'sessions')
+
+
 from conflict_resolver import resolve_session
 from decision_memo import generate_memo
 from workbook_builder import build_workbook
@@ -43,7 +55,7 @@ logger = logging.getLogger("manager")
 # ── Default paths ────────────────────────────────────────────────────────────
 # By convention, session artifacts live in a session directory.
 # The lead / orchestrator passes this in, or it can be set via env var.
-DEFAULT_SESSION_DIR = os.environ.get("QUORUM_SESSION_DIR", ".")
+DEFAULT_SESSION_DIR = os.environ.get("QUORUM_SESSION_DIR", default_sessions_dir())
 
 
 def discover_session_dir(candidate: str) -> str:

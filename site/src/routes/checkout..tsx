@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 import { useState } from "react";
+import { getSessionDir } from "../lib/sessionPaths";
 
 const STRIPE_LINK = "https://buy.stripe.com/8x27sLeW73HJdlxfmdfnO00";
 
@@ -9,7 +10,7 @@ const hireFirm = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const { sessionId } = data;
     const fs = await import("node:fs/promises");
-    const sessionPath = `/home/team/shared/sessions/${sessionId}/session.json`;
+    const sessionPath = `${getSessionDir(sessionId)}/session.json`;
     try {
       const raw = await fs.readFile(sessionPath, "utf8");
       const session = JSON.parse(raw);

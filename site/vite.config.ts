@@ -21,4 +21,8 @@ export default defineConfig({
     tanstackStart(),
     viteReact(),
   ],
+  routeFileIgnorePattern: /.*\.\..*\.ts$/,
+  optimizeDeps: {
+    exclude: ["@tanstack/react-start"],
+  },
 });

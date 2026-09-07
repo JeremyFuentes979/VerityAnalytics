@@ -210,9 +210,19 @@ class WorkbookBuilder:
             ws.cell(row=row, column=c).border = THIN_BORDER
         row += 1
         for i, rec in enumerate(recommendations, 1):
+            if isinstance(rec, dict):
+                source = rec.get("source", "")
+                recommendation = rec.get("recommendation", "")
+                if isinstance(recommendation, dict):
+                    recommendation = recommendation.get("recommendation", str(recommendation))
+                if isinstance(source, dict):
+                    source = source.get("source", str(source))
+            else:
+                source = ""
+                recommendation = str(rec)
             ws.cell(row=row, column=1, value=i).font = BODY_FONT
-            ws.cell(row=row, column=2, value=rec.get("source", "")).font = BODY_FONT
-            ws.cell(row=row, column=3, value=rec.get("recommendation", "")).font = BODY_FONT
+            ws.cell(row=row, column=2, value=str(source)).font = BODY_FONT
+            ws.cell(row=row, column=3, value=str(recommendation)).font = BODY_FONT
             for c in range(1, 4):
                 ws.cell(row=row, column=c).border = THIN_BORDER
             row += 1

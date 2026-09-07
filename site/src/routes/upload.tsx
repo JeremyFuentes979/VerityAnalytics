@@ -1,6 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 import { useState, useRef } from "react";
+import { getSessionDir } from "../lib/sessionPaths";
 
 const uploadFile = createServerFn({ method: "POST" })
   .validator((data: unknown) => {
@@ -13,7 +14,7 @@ const uploadFile = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const { fileName, fileContent } = data;
     const sessionId = crypto.randomUUID();
-    const sessionDir = `/home/team/shared/sessions/${sessionId}`;
+    const sessionDir = getSessionDir(sessionId);
     const fs = await import("node:fs/promises");
     await fs.mkdir(sessionDir, { recursive: true });
 

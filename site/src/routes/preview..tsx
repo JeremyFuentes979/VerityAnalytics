@@ -1,12 +1,13 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
+import { getSessionDir } from "../lib/sessionPaths";
 
 const getSession = createServerFn({ method: "GET" })
   .validator((d: unknown) => ({ sessionId: String(d) }))
   .handler(async ({ data }) => {
     const { sessionId } = data;
     const fs = await import("node:fs/promises");
-    const path = `/home/team/shared/sessions/${sessionId}`;
+    const path = getSessionDir(sessionId);
     try {
       const session = JSON.parse(await fs.readFile(`${path}/session.json`, "utf8"));
       let profile = null;

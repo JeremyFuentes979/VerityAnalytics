@@ -1,13 +1,14 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 import { useEffect, useState } from "react";
+import { getSessionDir } from "../lib/sessionPaths";
 
 const getStatus = createServerFn({ method: "GET" })
   .validator((d: unknown) => ({ sessionId: String(d) }))
   .handler(async ({ data }) => {
     const { sessionId } = data;
     const fs = await import("node:fs/promises");
-    const basePath = `/home/team/shared/sessions/${sessionId}`;
+    const basePath = getSessionDir(sessionId);
     try {
       const session = JSON.parse(await fs.readFile(`${basePath}/session.json`, "utf8"));
       const artifacts = { profile: false, analysis: false, auditTrail: false, decisionMemo: false, workbook: false };
@@ -26,7 +27,9 @@ const triggerWorkflow = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const { sessionId } = data;
     const { execSync } = await import("node:child_process");
-    execSync(`nohup python3 /home/team/shared/workflow/orchestrator.py ${sessionId} > /tmp/quorum-workflow-${sessionId}.log 2>&1 &`, { timeout: 5000 });
+    const repoRoot = process.env.QUORUM_REPO_ROOT || "..";
+    const orchestratorPath = `${repoRoot}/workflow/orchestrator.py`;
+    execSync(`nohup python3 "${orchestratorPath}" ${sessionId} > /tmp/quorum-workflow-${sessionId}.log 2>&1 &`, { timeout: 5000 });
     return { started: true };
   });
 

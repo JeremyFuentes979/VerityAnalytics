@@ -93,10 +93,15 @@ class DecisionMemo:
             if "recommendations" in analysis:
                 recs = analysis["recommendations"]
                 if isinstance(recs, list):
-                    recommendations.extend(
-                        {"source": "Analyst", "recommendation": r}
-                        for r in recs
-                    )
+                    for r in recs:
+                        if isinstance(r, dict):
+                            recommendation = r.get("recommendation", str(r))
+                        else:
+                            recommendation = str(r)
+                        recommendations.append({
+                            "source": "Analyst",
+                            "recommendation": recommendation,
+                        })
                 elif isinstance(recs, str):
                     recommendations.append({"source": "Analyst", "recommendation": recs})
 

@@ -4,6 +4,18 @@ import json
 import pandas as pd
 from datetime import datetime
 
+
+def repo_root():
+    return os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+
+
+def default_sessions_dir():
+    env_value = os.environ.get('QUORUM_SESSIONS_DIR')
+    if env_value:
+        return env_value
+    return os.path.join(repo_root(), 'sessions')
+
+
 class Auditor:
     def __init__(self, session_dir):
         self.session_dir = session_dir
@@ -64,34 +76,42 @@ class Auditor:
         data = self.load_data()
         if not data:
             return "No raw data found to clean."
-        
+
         analysis = self.load_analysis()
         profile = self.load_profile()
         cleaned_data = {}
+        corrections = []
+        data_quality_issues = []
 
         for filename, df in data.items():
             file_profile = profile.get('files', {}).get(filename, {})
             pk = file_profile.get('primary_key')
-            
+
             # 1. De-duplication
             initial_count = len(df)
-            
-            # Check if analysis specifies a subset for de-duplication
+
             subset = None
             if 'deduplication' in analysis:
                 for entry in analysis['deduplication']:
                     if entry.get('file') == filename:
                         subset = entry.get('subset')
                         break
-            
+
             df_cleaned = df.drop_duplicates(subset=subset)
             if len(df_cleaned) < initial_count:
                 reason = "Removed exact duplicates" if not subset else f"Removed duplicates based on {subset}"
                 self.log_change(filename, "all", "all", initial_count, len(df_cleaned), reason)
+                corrections.append({
+                    "file": filename,
+                    "action": "deduplicate",
+                    "before": initial_count,
+                    "after": len(df_cleaned),
+                    "reason": reason
+                })
 
             # 2. General Cleaning (Whitespace)
             for col in df_cleaned.select_dtypes(['object']).columns:
-                df_cleaned[col] = df_cleaned[col].str.strip()
+                df_cleaned[col] = df_cleaned[col].astype(str).str.strip()
 
             # 3. Apply Analyst Findings
             if 'anomalies' in analysis:
@@ -99,8 +119,7 @@ class Auditor:
                     if anomaly.get('file') == filename:
                         col_name = anomaly.get('column')
                         issue = anomaly.get('issue')
-                        
-                        # Find the row. Use PK if available, else use index
+
                         row_found = False
                         if pk and 'pk_value' in anomaly:
                             pk_val = anomaly['pk_value']
@@ -112,19 +131,34 @@ class Auditor:
                             row_idx = anomaly['row']
                             if row_idx in df_cleaned.index:
                                 row_found = True
-                        
+
                         if row_found and col_name in df_cleaned.columns:
                             old_val = df_cleaned.at[row_idx, col_name]
-                            
-                            # Example fixes
+
                             if issue == "Negative value" and old_val < 0:
                                 new_val = abs(old_val)
                                 df_cleaned.at[row_idx, col_name] = new_val
                                 self.log_change(filename, row_idx, col_name, old_val, new_val, "Fixed negative value per Analyst finding")
+                                corrections.append({
+                                    "file": filename,
+                                    "row": int(row_idx),
+                                    "column": col_name,
+                                    "old_value": str(old_val),
+                                    "new_value": str(new_val),
+                                    "reason": "Fixed negative value per Analyst finding"
+                                })
                             elif issue == "Missing value" and 'suggested_value' in anomaly:
                                 new_val = anomaly['suggested_value']
                                 df_cleaned.at[row_idx, col_name] = new_val
                                 self.log_change(filename, row_idx, col_name, old_val, new_val, "Filled missing value per Analyst suggestion")
+                                corrections.append({
+                                    "file": filename,
+                                    "row": int(row_idx),
+                                    "column": col_name,
+                                    "old_value": str(old_val),
+                                    "new_value": str(new_val),
+                                    "reason": "Filled missing value per Analyst suggestion"
+                                })
 
             # 4. Standardization Rules
             if 'standardization_rules' in analysis:
@@ -133,17 +167,27 @@ class Auditor:
                     fmt = rule.get('format')
                     if col in df_cleaned.columns:
                         if fmt == "Uppercase 2-letter":
-                            original = df_cleaned[col].copy()
-                            df_cleaned[col] = df_cleaned[col].str.upper().str[:2]
-                            # Simplified logging
+                            df_cleaned[col] = df_cleaned[col].astype(str).str.upper().str[:2]
                             self.log_change(filename, "all", col, "original", "Standardized to Uppercase 2-letter", "Standardization rule")
+                            corrections.append({
+                                "file": filename,
+                                "column": col,
+                                "action": "standardize",
+                                "reason": "Standardization rule"
+                            })
 
             cleaned_data[filename] = df_cleaned
 
-        # Save cleaned data
+        # Save cleaned data to root-level file expected by manager
         if not os.path.exists(self.cleaned_dir):
             os.makedirs(self.cleaned_dir)
-        
+
+        if len(cleaned_data) == 1:
+            primary_name = next(iter(cleaned_data.keys()))
+            root_csv = os.path.join(self.session_dir, 'cleaned_data.csv')
+            cleaned_data[primary_name].to_csv(root_csv, index=False)
+            self.audit_trail_path = os.path.join(self.session_dir, 'audit_trail.json')
+
         for filename, df in cleaned_data.items():
             output_path = os.path.join(self.cleaned_dir, filename)
             if filename.endswith('.csv'):
@@ -151,7 +195,14 @@ class Auditor:
             else:
                 df.to_excel(output_path, index=False)
 
-        # Save audit trail
+        audit_record = {
+            'corrections': corrections,
+            'data_quality_issues': data_quality_issues,
+            'standardizations': [c for c in corrections if c.get('action') == 'standardize'],
+            'deduplications': [c for c in corrections if c.get('action') == 'deduplicate']
+        }
+        self.audit_trail = audit_record
+
         with open(self.audit_trail_path, 'w') as f:
             json.dump(self.audit_trail, f, indent=2)
 
@@ -165,8 +216,8 @@ if __name__ == "__main__":
         if os.path.isabs(session_id):
             session_path = session_id
         else:
-            session_path = os.path.join('/home/team/shared/sessions', session_id)
-        
+            session_path = os.path.join(default_sessions_dir(), session_id)
+
         auditor = Auditor(session_path)
         print(auditor.validate_and_clean())
     else:

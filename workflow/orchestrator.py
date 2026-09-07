@@ -11,8 +11,28 @@ import subprocess
 import sys
 import time
 
-SHARED_DIR = '/home/team/shared'
-SESSIONS_DIR = os.path.join(SHARED_DIR, 'sessions')
+
+def resolve_shared_dir():
+    """Prefer the deployment path when available, otherwise use the local repo checkout."""
+    env_value = os.environ.get('QUORUM_SHARED_DIR')
+    if env_value:
+        return env_value
+    if os.path.exists('/home/team/shared'):
+        return '/home/team/shared'
+    return os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+
+
+def default_sessions_dir():
+    """Return a repo-local default for sessions when running outside the deployment server."""
+    env_value = os.environ.get('QUORUM_SESSIONS_DIR')
+    if env_value:
+        return env_value
+    repo_root = resolve_shared_dir()
+    return os.path.join(repo_root, 'sessions')
+
+
+SHARED_DIR = resolve_shared_dir()
+SESSIONS_DIR = default_sessions_dir()
 
 AGENTS = [
     {
