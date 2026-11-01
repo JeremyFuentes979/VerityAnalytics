@@ -15,7 +15,7 @@ type Profile = {
 };
 
 const getPreview = createServerFn({ method: "GET" })
-  .inputValidator((d: { sessionId: string }) => ({ sessionId: String(d.sessionId) }))
+  .validator((d: { sessionId: string }) => ({ sessionId: String(d.sessionId) }))
   .handler(async ({ data }) => {
     const { readSession, readArtifactJson, toPublic } = await import("../lib/sessions.server");
     const session = await readSession(data.sessionId);

@@ -1,23 +1,22 @@
 import tailwindcss from "@tailwindcss/vite";
 import { tanstackStart } from "@tanstack/react-start/plugin/vite";
 import viteReact from "@vitejs/plugin-react";
-import { defineConfig, loadEnv } from "vite";
+import { defineConfig } from "vite";
 import tsConfigPaths from "vite-tsconfig-paths";
 
-export default defineConfig(({ mode }) => {
+import { applyDotEnv } from "./dotenv";
+
+export default defineConfig(() => {
   // Make .env values (STRIPE_*, SITE_URL, VERITY_*) visible to server code in
   // `vite dev` and `vite build`. Real environment variables always win.
-  const env = loadEnv(mode, process.cwd(), "");
-  for (const [key, value] of Object.entries(env)) {
-    if (process.env[key] === undefined) process.env[key] = value;
-  }
+  applyDotEnv(process.cwd());
 
   return {
     server: {
       port: 3000,
       host: true,
       // Accept any Host header so a reverse proxy never triggers "Blocked request".
-      allowedHosts: true,
+      allowedHosts: true as const,
     },
     plugins: [
       tailwindcss(),

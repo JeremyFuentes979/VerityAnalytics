@@ -5,7 +5,7 @@ import { useState } from "react";
 import { PRICE_DISPLAY } from "../lib/config";
 
 const getCheckoutState = createServerFn({ method: "GET" })
-  .inputValidator((d: { sessionId: string }) => ({ sessionId: String(d.sessionId) }))
+  .validator((d: { sessionId: string }) => ({ sessionId: String(d.sessionId) }))
   .handler(async ({ data }) => {
     const { readSession } = await import("../lib/sessions.server");
     const session = await readSession(data.sessionId);
@@ -18,7 +18,7 @@ const getCheckoutState = createServerFn({ method: "GET" })
 type CheckoutResult = { url: string } | { error: string };
 
 const startCheckout = createServerFn({ method: "POST" })
-  .inputValidator((d: { sessionId: string }) => ({ sessionId: String(d.sessionId) }))
+  .validator((d: { sessionId: string }) => ({ sessionId: String(d.sessionId) }))
   .handler(async ({ data }): Promise<CheckoutResult> => {
     const { readSession } = await import("../lib/sessions.server");
     const { createCheckoutUrl, devBypassEnabled, markPaidAndStart, stripeConfigured } = await import("../lib/payments.server");

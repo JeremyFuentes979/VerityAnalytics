@@ -7,7 +7,7 @@ import type { PublicSession } from "../lib/sessions.server";
 type Artifacts = { profile: boolean; analysis: boolean; auditTrail: boolean; decisionMemo: boolean; workbook: boolean };
 
 const getResults = createServerFn({ method: "GET" })
-  .inputValidator((d: { sessionId: string; cs?: string }) => ({ sessionId: String(d.sessionId), cs: d.cs ? String(d.cs) : undefined }))
+  .validator((d: { sessionId: string; cs?: string }) => ({ sessionId: String(d.sessionId), cs: d.cs ? String(d.cs) : undefined }))
   .handler(async ({ data }) => {
     const { readSession, toPublic, fileExists } = await import("../lib/sessions.server");
     const { getSessionDir } = await import("../lib/sessionPaths");
@@ -40,7 +40,7 @@ const getResults = createServerFn({ method: "GET" })
   });
 
 const retryWorkflow = createServerFn({ method: "POST" })
-  .inputValidator((d: { sessionId: string }) => ({ sessionId: String(d.sessionId) }))
+  .validator((d: { sessionId: string }) => ({ sessionId: String(d.sessionId) }))
   .handler(async ({ data }) => {
     const { readSession, writeSession } = await import("../lib/sessions.server");
     const { startWorkflow } = await import("../lib/workflow.server");
