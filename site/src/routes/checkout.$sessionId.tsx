@@ -21,7 +21,7 @@ const startCheckout = createServerFn({ method: "POST" })
   .validator((d: { sessionId: string }) => ({ sessionId: String(d.sessionId) }))
   .handler(async ({ data }): Promise<CheckoutResult> => {
     const { readSession } = await import("../lib/sessions.server");
-    const { createCheckoutUrl, devBypassEnabled, markPaidAndStart, stripeConfigured } = await import("../lib/payments.server");
+    const { createCheckoutUrl, devBypassEnabled, markPaidAndStart, stripeConfigured, stripeKeyProblem } = await import("../lib/payments.server");
     const session = await readSession(data.sessionId);
     if (!session) return { error: "This session no longer exists. Please upload your file again." };
     if (session.paidAt) return { url: `/results/${data.sessionId}` };
@@ -32,6 +32,12 @@ const startCheckout = createServerFn({ method: "POST" })
       return { url: `/results/${data.sessionId}` };
     }
     if (!stripeConfigured()) return { error: "Payments are not set up yet. Please try again later." };
+    const keyProblem = stripeKeyProblem();
+    if (keyProblem) {
+      console.error(`[checkout] ${keyProblem}`);
+      // Safe to show: this only ever describes a configuration mistake, never a key.
+      return { error: process.env.NODE_ENV === "production" ? "Payments are not set up correctly. Please try again later." : keyProblem };
+    }
 
     try {
       const { getRequestUrl } = await import("@tanstack/react-start/server");

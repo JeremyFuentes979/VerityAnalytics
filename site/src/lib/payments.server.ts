@@ -2,6 +2,7 @@ import Stripe from "stripe";
 
 import { BRAND, CURRENCY, PRICE_CENTS } from "./config";
 import { isValidSessionId } from "./sessionPaths";
+import { checkStripeKey } from "./stripeKey";
 import { readSession, writeSession, WORKFLOW_RUNNING } from "./sessions.server";
 import { startWorkflow } from "./workflow.server";
 
@@ -16,13 +17,19 @@ export function stripeConfigured(): boolean {
   return Boolean(process.env.STRIPE_SECRET_KEY);
 }
 
-function getStripe(): Stripe {
-  const key = process.env.STRIPE_SECRET_KEY;
-  if (!key) throw new Error("Stripe is not configured");
-  return new Stripe(key);
+export class PaymentError extends Error {}
+
+/** Why Stripe can't be used right now, or null when the configured key is fine. */
+export function stripeKeyProblem(): string | null {
+  const check = checkStripeKey(process.env.STRIPE_SECRET_KEY);
+  return check.ok ? null : check.reason;
 }
 
-export class PaymentError extends Error {}
+function getStripe(): Stripe {
+  const problem = stripeKeyProblem();
+  if (problem) throw new PaymentError(problem);
+  return new Stripe(process.env.STRIPE_SECRET_KEY as string);
+}
 
 /**
  * Record that a session is paid and kick off the workflow. Idempotent: the webhook
