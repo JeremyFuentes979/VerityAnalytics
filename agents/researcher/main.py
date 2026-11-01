@@ -1,134 +1,118 @@
+"""Researcher — data ingestion and profiling.
+
+Usage:
+    python main.py <session-id-or-session-dir>
+
+Reads  <session>/input.(csv|xlsx|xls|pdf)
+Writes <session>/raw/data.csv   normalised copy every later agent reads
+       <session>/profile.json   profile shown in the free preview
+On failure writes <session>/profile_error.json {"message": ...} and exits 1.
+"""
+
 import os
 import sys
-import json
-import subprocess
-import ingest
-import reference_data
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, HERE)
+sys.path.insert(0, os.path.join(HERE, ".."))
+
+import ingest  # noqa: E402
+import reference_data  # noqa: E402
+from _shared.jsonio import read_json, write_json  # noqa: E402
+
+INPUT_NAMES = ("input.csv", "input.xlsx", "input.xls", "input.pdf")
 
 
 def repo_root():
-    return os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+    return os.path.abspath(os.path.join(HERE, "..", ".."))
 
 
 def default_sessions_dir():
-    env_value = os.environ.get('QUORUM_SESSIONS_DIR')
-    if env_value:
-        return env_value
-    return os.path.join(repo_root(), 'sessions')
+    return os.environ.get("VERITY_SESSIONS_DIR") or os.path.join(repo_root(), "sessions")
 
 
-def run_sql(sql):
-    try:
-        result = subprocess.check_output(["team-db", sql], stderr=subprocess.STDOUT)
-        return json.loads(result)
-    except subprocess.CalledProcessError as e:
-        print(f"SQL Error: {e.output.decode()}")
-        return None
+def resolve_session_dir(arg):
+    if os.path.isabs(arg) or os.sep in arg:
+        return os.path.abspath(arg)
+    return os.path.join(default_sessions_dir(), arg)
 
-def run_session(session_id):
-    session_dir = os.path.join(default_sessions_dir(), session_id)
-    input_file = os.path.join(session_dir, "input.csv")
-    input_pdf = os.path.join(session_dir, "input.pdf")
-    input_xlsx = os.path.join(session_dir, "input.xlsx")
-    profile_output = os.path.join(session_dir, "profile.json")
-    
-    if not os.path.exists(session_dir):
-        os.makedirs(session_dir)
 
-    print(f"Processing session {session_id}...")
-    run_sql(f"UPDATE sessions SET status = 'processing' WHERE id = '{session_id}'")
+def fail(session_dir, message):
+    print(f"ERROR: {message}")
+    write_json(os.path.join(session_dir, "profile_error.json"), {"message": message})
+    return 1
 
-    # Find the input file (check csv, then pdf, then xlsx)
-    input_path = None
-    if os.path.exists(input_file):
-        input_path = input_file
-    elif os.path.exists(input_pdf):
-        input_path = input_pdf
-    elif os.path.exists(input_xlsx):
-        input_path = input_xlsx
 
-    if input_path:
-        print(f"Ingesting {input_path}...")
-        result = ingest.ingest_file(input_path)
-        if result.get("status") == "success":
-            with open(profile_output, 'w') as out_f:
-                json.dump(result["profile"], out_f, indent=2)
-            print(f"Saved profile to {profile_output}")
-            run_sql(f"UPDATE sessions SET status = 'completed', profile_path = '{profile_output}' WHERE id = '{session_id}'")
-        else:
-            print(f"Error ingesting: {result.get('message')}")
-            run_sql(f"UPDATE sessions SET status = 'error' WHERE id = '{session_id}'")
-    else:
-        # Fallback to directory scanning if input.csv doesn't exist
-        input_dir = os.path.join(session_dir, "input")
-        output_dir = os.path.join(session_dir, "output")
-        profiles_dir = os.path.join(output_dir, "profiles")
-        
-        if not os.path.exists(profiles_dir):
-            os.makedirs(profiles_dir)
-            
-        print(f"Scanning {input_dir} for files...")
-        if os.path.exists(input_dir):
-            for f in os.listdir(input_dir):
-                if f.endswith(('.csv', '.xlsx', '.xls', '.pdf')):
-                    file_path = os.path.join(input_dir, f)
-                    print(f"Ingesting {file_path}...")
-                    result = ingest.ingest_file(file_path)
-                    if result.get("status") == "success":
-                        output_file = os.path.join(profiles_dir, f"{f}_profile.json")
-                        with open(output_file, 'w') as out_f:
-                            json.dump(result["profile"], out_f, indent=2)
-                        print(f"Saved profile to {output_file}")
-                    else:
-                        print(f"Error ingesting {f}: {result.get('message')}")
-            
-            # Check for reference data request
-            req_file = os.path.join(input_dir, "reference_data_request.json")
-            if os.path.exists(req_file):
-                process_reference_data(input_dir, output_dir)
-            
-            run_sql(f"UPDATE sessions SET status = 'completed' WHERE id = '{session_id}'")
-        else:
-            print(f"No input found for session {session_id}")
-            run_sql(f"UPDATE sessions SET status = 'failed', data_path = 'not found' WHERE id = '{session_id}'")
+def run_session(session_dir):
+    if not os.path.isdir(session_dir):
+        print(f"ERROR: session directory not found: {session_dir}")
+        return 1
 
-def process_reference_data(input_dir, output_dir):
-    req_file = os.path.join(input_dir, "reference_data_request.json")
-    print(f"Processing reference data request from {req_file}...")
-    with open(req_file, 'r') as f:
-        requests = json.load(f)
-        
+    error_path = os.path.join(session_dir, "profile_error.json")
+    if os.path.exists(error_path):
+        os.unlink(error_path)
+
+    input_path = next((os.path.join(session_dir, n) for n in INPUT_NAMES
+                       if os.path.exists(os.path.join(session_dir, n))), None)
+    if input_path is None:
+        return fail(session_dir, "No uploaded file was found for this session.")
+
+    print(f"Ingesting {input_path}...")
+    result = ingest.ingest_file(input_path)
+    if result["status"] != "success":
+        return fail(session_dir, result.get("message", "The file could not be read."))
+
+    df = result.pop("dataframe")
+    profile = result["profile"]
+
+    raw_dir = os.path.join(session_dir, "raw")
+    os.makedirs(raw_dir, exist_ok=True)
+    df.to_csv(os.path.join(raw_dir, "data.csv"), index=False)
+
+    session = read_json(os.path.join(session_dir, "session.json"), {}) or {}
+    profile["source"] = session.get("fileName") or os.path.basename(input_path)
+    profile["file_size_bytes"] = os.path.getsize(input_path)
+    profile["raw_data_file"] = "raw/data.csv"
+    if profile["source_type"] == ".pdf" and not any(
+        str(v).strip() for v in df.get("text", []) if v is not None
+    ):
+        profile["warnings"].append("No extractable text found. Scanned PDFs need OCR, which is not supported yet.")
+
+    write_json(os.path.join(session_dir, "profile.json"), profile)
+    print(f"Saved profile to {os.path.join(session_dir, 'profile.json')}")
+
+    request_path = os.path.join(session_dir, "reference_data_request.json")
+    if os.path.exists(request_path):
+        process_reference_data(session_dir, request_path)
+    return 0
+
+
+def process_reference_data(session_dir, request_path):
+    requests = read_json(request_path, []) or []
     results = {}
     for req in requests:
         rtype = req.get("type")
-        if rtype == "fx":
-            res = reference_data.get_fx_rate(req["base"], req["target"], req.get("date"))
-            key = f"fx_{req['base']}_{req['target']}"
-        elif rtype == "benchmark":
-            res = reference_data.get_benchmark(req["symbol"], req.get("period", "1mo"))
-            key = f"benchmark_{req['symbol']}"
-        else:
-            res = {"error": f"Unknown type: {rtype}"}
-            key = "error"
+        try:
+            if rtype == "fx":
+                res = reference_data.get_fx_rate(req["base"], req["target"], req.get("date"))
+                key = f"fx_{req['base']}_{req['target']}"
+            elif rtype == "benchmark":
+                res = reference_data.get_benchmark(req["symbol"], req.get("period", "1mo"))
+                key = f"benchmark_{req['symbol']}"
+            else:
+                res, key = {"error": f"Unknown type: {rtype}"}, "error"
+        except Exception as exc:  # noqa: BLE001
+            res, key = {"error": str(exc)}, f"{rtype}_error"
         results[key] = res
-        
-    ref_output = os.path.join(output_dir, "reference_data_results.json")
-    with open(ref_output, 'w') as f:
-        json.dump(results, f, indent=2)
-    print(f"Saved reference data to {ref_output}")
+    write_json(os.path.join(session_dir, "reference_data_results.json"), results)
+
 
 def main():
     if len(sys.argv) < 2:
-        print("Usage: python main.py <session_id>")
+        print("Usage: python main.py <session-id-or-dir>")
         sys.exit(1)
-        
-    session_id = sys.argv[1]
-    
-    # If the argument is a full path, extract the last part as session_id if it's in /shared/sessions/
-    if "/home/team/shared/sessions/" in session_id:
-        session_id = os.path.basename(session_id.rstrip("/"))
-        
-    run_session(session_id)
+    sys.exit(run_session(resolve_session_dir(sys.argv[1])))
+
 
 if __name__ == "__main__":
     main()

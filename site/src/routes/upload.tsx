@@ -1,33 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { createServerFn } from "@tanstack/react-start";
 import { useState, useRef } from "react";
-import { getSessionDir } from "../lib/sessionPaths";
-
-const uploadFile = createServerFn({ method: "POST" })
-  .validator((data: unknown) => {
-    if (typeof data !== "object" || data === null) throw new Error("Invalid request");
-    const d = data as Record<string, unknown>;
-    if (typeof d.fileName !== "string") throw new Error("fileName required");
-    if (typeof d.fileContent !== "string") throw new Error("fileContent required");
-    return { fileName: d.fileName, fileContent: d.fileContent };
-  })
-  .handler(async ({ data }) => {
-    const { fileName, fileContent } = data;
-    const sessionId = crypto.randomUUID();
-    const sessionDir = getSessionDir(sessionId);
-    const fs = await import("node:fs/promises");
-    await fs.mkdir(sessionDir, { recursive: true });
-
-    const buffer = Buffer.from(fileContent, "base64");
-    const ext = fileName.endsWith(".csv") ? "csv" : fileName.endsWith(".pdf") ? "pdf" : "xlsx";
-    await fs.writeFile(`${sessionDir}/input.${ext}`, buffer);
-    await fs.writeFile(
-      `${sessionDir}/session.json`,
-      JSON.stringify({ sessionId, fileName, status: "uploaded", createdAt: new Date().toISOString() })
-    );
-
-    return { sessionId };
-  });
+import { MAX_UPLOAD_BYTES, PRICE_DISPLAY } from "../lib/config";
 
 export const Route = createFileRoute("/upload")({
   component: Upload,
@@ -51,17 +24,30 @@ function Upload() {
       return;
     }
 
-    const buffer = await f.arrayBuffer();
-    const bytes = new Uint8Array(buffer);
-    let binary = "";
-    for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
-    const base64 = btoa(binary);
+    if (f.size === 0) {
+      setError("That file is empty.");
+      setUploading(false);
+      return;
+    }
+    if (f.size > MAX_UPLOAD_BYTES) {
+      setError("That file is larger than the 50 MB limit.");
+      setUploading(false);
+      return;
+    }
 
     try {
-      const result = await uploadFile({ data: { fileName: f.name, fileContent: base64 } });
-      navigate({ to: `/preview/${result.sessionId}` });
+      const body = new FormData();
+      body.append("file", f);
+      const res = await fetch("/api/upload", { method: "POST", body });
+      const payload = (await res.json().catch(() => ({}))) as { sessionId?: string; error?: string };
+      if (!res.ok || !payload.sessionId) {
+        setError(payload.error ?? "Upload failed. Please try again.");
+        setUploading(false);
+        return;
+      }
+      await navigate({ to: "/preview/$sessionId", params: { sessionId: payload.sessionId } });
     } catch {
-      setError("Upload failed. Please try again.");
+      setError("Upload failed. Please check your connection and try again.");
       setUploading(false);
     }
   };
@@ -101,7 +87,7 @@ function Upload() {
           ) : (
             <>
               <p className="font-medium text-navy">Drag a file here or click to browse</p>
-              <p className="text-xs text-navy-400">Supports .csv, .xlsx, .xls, .pdf — maximum 50 MB</p>
+              <p className="text-xs text-navy-500">Supports .csv, .xlsx, .xls, .pdf — maximum 50 MB</p>
             </>
           )}
         </div>
@@ -125,7 +111,7 @@ function Upload() {
         <ol className="mt-4 space-y-2 text-sm text-navy-500">
           <li>1. We profile your data — schema, statistics, null analysis, and basic patterns</li>
           <li>2. You receive a free preview with everything we found</li>
-          <li>3. Satisfied with the preview? Hire the firm for a one-time $50 fee to receive the full analysis, cleaned data, audit trail, and professional Excel workbook</li>
+          <li>3. Satisfied with the preview? Hire the firm for a one-time {PRICE_DISPLAY} fee to receive the full analysis, cleaned data, audit trail, and professional Excel workbook</li>
         </ol>
       </div>
     </div>

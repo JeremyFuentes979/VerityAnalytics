@@ -6,10 +6,10 @@
  * a structured status object the frontend can consume.
  * 
  * Usage (CLI):
- *   node /home/team/shared/concierge/status.js <sessionId>
+ *   node agents/concierge/status.js <sessionId>
  * 
  * Usage (import):
- *   const { getStatus } = require('/home/team/shared/concierge/status.js');
+ *   const { getStatus } = require('./agents/concierge/status.js');
  *   const status = await getStatus('session-uuid-here');
  * 
  * Returns: { workflow, summary, session } or null if session not found.
@@ -19,7 +19,8 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const TEMPLATES = require('./templates.json');
 
-const SESSIONS_DIR = '/home/team/shared/sessions';
+// VERITY_SESSIONS_DIR overrides; default is <repo>/sessions (this file lives in <repo>/agents/concierge).
+const SESSIONS_DIR = process.env.VERITY_SESSIONS_DIR || path.resolve(__dirname, '..', '..', 'sessions');
 
 /**
  * Ordered workflow stages. Each maps to a specific artifact file and agent.
@@ -170,7 +171,7 @@ async function getStatus(sessionId) {
       headline: TEMPLATES.result_presentation.in_progress.headline,
       subheadline: TEMPLATES.result_presentation.in_progress.subheadline,
     };
-  } else if (session.status === 'hired') {
+  } else if (session.status === 'hired' || session.status === 'paid' || session.status === 'queued') {
     status = 'analysis_started';
     summaryMessage = {
       badge: 'Analysis Started',
