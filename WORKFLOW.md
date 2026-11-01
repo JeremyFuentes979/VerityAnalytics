@@ -1,11 +1,11 @@
-# Quorum Team Workflow
+# Verity Analytics Team Workflow
 
 ## Code & Git Workflow
 
 ### Branch Strategy
-- `main` — production-ready code. Always deployable.
-- `feature/*` — feature branches for new work.
-- `fix/*` — bug fix branches.
+- `main`: production-ready code. Always deployable.
+- `feature/*`: feature branches for new work.
+- `fix/*`: bug fix branches.
 
 ### Workflow
 1. Create a feature branch from `main`.
@@ -15,10 +15,14 @@
 
 ### PR Conventions
 - Title: `[Type] Short description` (e.g. `[Feat] Add Researcher ingestion module`)
-- Description: What changed and why.
+- Description: what changed and why.
 - Keep PRs focused on a single concern.
 
 ## Local Testing
-- Website: `cd site && bun run dev` (dev mode) or `bun run publish` (prod rebuild)
-- Modules: `python3 /home/team/shared/<agent>/main.py <session-dir>`
-- Status: `node /home/team/shared/concierge/status.js <session-id>`
+- Setup once: `./scripts/setup.sh`
+- Website: `npm --prefix site run dev` (dev) or `npm --prefix site run build && npm --prefix site run start` (prod)
+- Whole pipeline on a session folder: `.venv/bin/python workflow/orchestrator.py <session-id> --stage profile|full`
+  (the full stage requires `paidAt` in `session.json`; set `VERITY_ALLOW_UNPAID=1` to bypass for local debugging)
+- Single agent: `.venv/bin/python agents/<agent>/<script>.py <session-dir>`
+- Status: `node agents/concierge/status.js <session-id>`
+- Tests: `.venv/bin/python -m unittest discover -s tests -t .` and `npm --prefix site test`

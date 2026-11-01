@@ -9,6 +9,7 @@ Produces a polished, professional Excel workbook (.xlsx) with:
 
 import json
 import csv
+import pandas as pd
 import os
 import logging
 from datetime import datetime
@@ -19,9 +20,46 @@ from openpyxl.styles import (
 )
 from openpyxl.chart import BarChart, PieChart, Reference
 from openpyxl.utils import get_column_letter
+from openpyxl.cell.cell import ILLEGAL_CHARACTERS_RE
 from openpyxl.formatting.rule import CellIsRule
 
 logger = logging.getLogger("manager.workbook_builder")
+
+MAX_DATA_ROWS = 1_000_000      # Excel hard limit is 1,048,576 rows
+STYLED_ROW_LIMIT = 5_000       # per-cell styling is slow; style the first rows only
+MAX_LOG_ROWS = 2_000
+
+
+def _excel_value(v):
+    """Make a value safe to put in an Excel cell without changing its meaning."""
+    if v is None:
+        return None
+    if hasattr(v, "item") and callable(getattr(v, "item", None)):
+        try:
+            v = v.item()
+        except (ValueError, TypeError):
+            v = str(v)
+    if isinstance(v, float) and (v != v or v in (float("inf"), float("-inf"))):
+        return None
+    if isinstance(v, str):
+        return ILLEGAL_CHARACTERS_RE.sub("", v)
+    if isinstance(v, (list, dict, tuple, set)):
+        return ILLEGAL_CHARACTERS_RE.sub("", json.dumps(v, default=str))[:32000]
+    return v
+
+
+def _put(ws, row, col, value):
+    """Write a cell. Text that begins with '=' is stored as text, never as a formula."""
+    value = _excel_value(value)
+    cell = ws.cell(row=row, column=col)
+    if isinstance(value, str):
+        cell.value = value[:32000]
+        if value.startswith("="):
+            cell.data_type = "s"
+    else:
+        cell.value = value
+    return cell
+
 
 # --- Style Constants ---
 HEADER_FONT = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
@@ -45,18 +83,15 @@ YELLOW_FILL = PatternFill(start_color="FFF9C4", end_color="FFF9C4", fill_type="s
 FOOTER_FONT = Font(name="Calibri", size=8, italic=True, color="808080")
 
 
-def _auto_width(ws, min_width=10, max_width=45):
-    """Auto-adjust column widths based on content."""
-    for col_cells in ws.columns:
+def _auto_width(ws, min_width=10, max_width=45, scan_rows=1000):
+    """Auto-adjust column widths based on the first rows of content."""
+    for col_cells in ws.iter_cols(max_row=min(ws.max_row, scan_rows)):
         max_len = 0
         col_letter = get_column_letter(col_cells[0].column)
         for cell in col_cells:
             if cell.value is not None:
-                cell_len = len(str(cell.value))
-                if cell_len > max_len:
-                    max_len = cell_len
-        adjusted = min(max(max_len + 2, min_width), max_width)
-        ws.column_dimensions[col_letter].width = adjusted
+                max_len = max(max_len, len(str(cell.value)))
+        ws.column_dimensions[col_letter].width = min(max(max_len + 2, min_width), max_width)
 
 
 def _apply_header_style(ws, row, max_col):
@@ -131,7 +166,7 @@ class WorkbookBuilder:
         ws.sheet_properties.tabColor = "1F4E79"
 
         row = 1
-        row = _add_title(ws, "Quorum Financial Analysis — Executive Summary", row)
+        row = _add_title(ws, "Verity Analytics — Executive Summary", row)
         row = _add_subtitle(ws, f"Generated: {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}", row)
         row += 1
 
@@ -253,23 +288,28 @@ class WorkbookBuilder:
 
         csv_path = os.path.join(self.session_dir, "cleaned_data.csv")
         if os.path.exists(csv_path):
-            with open(csv_path, "r") as f:
-                reader = csv.reader(f)
-                rows_data = list(reader)
+            df = pd.read_csv(csv_path)
+            truncated = len(df) > MAX_DATA_ROWS
+            if truncated:
+                df = df.iloc[:MAX_DATA_ROWS]
 
-            if rows_data:
-                headers = rows_data[0]
-                for col_idx, header in enumerate(headers, 1):
-                    ws.cell(row=row, column=col_idx, value=header)
-                _apply_header_style(ws, row, len(headers))
+            headers = [str(c) for c in df.columns]
+            for col_idx, header in enumerate(headers, 1):
+                _put(ws, row, col_idx, header)
+            _apply_header_style(ws, row, len(headers))
+            header_row = row
+            row += 1
+
+            for record in df.itertuples(index=False, name=None):
+                for col_idx, val in enumerate(record, 1):
+                    _put(ws, row, col_idx, None if pd.isna(val) else val)
                 row += 1
 
-                for data_row in rows_data[1:]:
-                    for col_idx, val in enumerate(data_row, 1):
-                        ws.cell(row=row, column=col_idx, value=val)
-                    row += 1
-
-                _apply_body_style(ws, 4, row - 1, len(headers) if headers else 1)
+            if headers and len(df):
+                _apply_body_style(ws, header_row + 1, min(row - 1, header_row + STYLED_ROW_LIMIT), len(headers))
+                ws.auto_filter.ref = f"A{header_row}:{get_column_letter(len(headers))}{row - 1}"
+            if truncated:
+                _put(ws, row + 1, 1, f"Note: output truncated to the first {MAX_DATA_ROWS:,} rows (Excel's limit).")
         else:
             ws.cell(row=row, column=1, value="No cleaned data available. Run the Auditor module first.").font = BODY_FONT
 
@@ -302,31 +342,30 @@ class WorkbookBuilder:
                     ws.cell(row=row, column=1).border = THIN_BORDER
                     ws.cell(row=row, column=2).border = THIN_BORDER
                     row += 1
+                    numeric_rows = []
                     for key, val in metrics.items():
                         ws.cell(row=row, column=1, value=str(key)).font = BODY_FONT
-                        ws.cell(row=row, column=2, value=str(val)).font = BODY_FONT
+                        is_num = isinstance(val, (int, float)) and not isinstance(val, bool)
+                        _put(ws, row, 2, val if is_num else (", ".join(map(str, val)) if isinstance(val, list) else str(val))).font = BODY_FONT
                         ws.cell(row=row, column=1).border = THIN_BORDER
                         ws.cell(row=row, column=2).border = THIN_BORDER
+                        if is_num:
+                            numeric_rows.append(row)
                         row += 1
 
-                    # Try to make a bar chart from numeric metrics
-                    try:
-                        chart_row = row + 1
-                        chart = BarChart()
-                        chart.type = "col"
-                        chart.title = "Key Metrics Visualization"
-                        chart.y_axis.title = "Value"
-                        chart.x_axis.title = "Metric"
-                        chart.style = 10
-
-                        data_ref = Reference(ws, min_col=2, min_row=row - len(metrics), max_row=row - 1)
-                        cats_ref = Reference(ws, min_col=1, min_row=row - len(metrics), max_row=row - 1)
-                        chart.add_data(data_ref, titles_from_data=False)
-                        chart.set_categories(cats_ref)
-                        chart.shape = 4
-                        ws.add_chart(chart, f"E{chart_row}")
-                    except Exception as e:
-                        logger.warning(f"Could not create chart for key metrics: {e}")
+                    count_rows = [r for r in numeric_rows if str(ws.cell(row=r, column=1).value).endswith("_count")]
+                    if count_rows and count_rows == list(range(count_rows[0], count_rows[-1] + 1)):
+                        try:
+                            chart = BarChart()
+                            chart.type = "col"
+                            chart.title = "Dataset Size"
+                            chart.style = 10
+                            chart.add_data(Reference(ws, min_col=2, min_row=count_rows[0], max_row=count_rows[-1]), titles_from_data=False)
+                            chart.set_categories(Reference(ws, min_col=1, min_row=count_rows[0], max_row=count_rows[-1]))
+                            chart.legend = None
+                            ws.add_chart(chart, "E4")
+                        except Exception as e:  # noqa: BLE001
+                            logger.warning(f"Could not create chart for key metrics: {e}")
                 row += 1
 
             row += 1
@@ -346,7 +385,10 @@ class WorkbookBuilder:
                     row += 1
                     for i, anom in enumerate(anomalies, 1):
                         ws.cell(row=row, column=1, value=i).font = BODY_FONT
-                        desc = anom.get("description", anom.get("field", str(anom)))
+                        desc = anom.get("description") or (
+                            f"Row {anom['row_index']}: {anom.get('reason', 'flagged')}" if "row_index" in anom
+                            else anom.get("reason", anom.get("field", str(anom)))
+                        )
                         sev = anom.get("severity", anom.get("severity", "medium"))
                         ws.cell(row=row, column=2, value=str(desc)).font = BODY_FONT
                         sev_cell = ws.cell(row=row, column=3, value=str(sev))
@@ -471,7 +513,7 @@ class WorkbookBuilder:
                     for c in corrections:
                         for col_idx, key in enumerate(sorted_keys, 1):
                             val = c.get(key, "")
-                            ws.cell(row=row, column=col_idx, value=str(val))
+                            _put(ws, row, col_idx, str(val))
                         row += 1
                     _apply_body_style(ws, row - len(corrections), row - 1, len(sorted_keys))
                 elif isinstance(corrections, dict):
@@ -506,6 +548,27 @@ class WorkbookBuilder:
                 elif isinstance(dq, str):
                     ws.cell(row=row, column=1, value=dq).font = BODY_FONT
                     ws.cell(row=row, column=1).border = THIN_BORDER
+                    row += 1
+                row += 1
+
+            # Cell-level change log
+            change_log = audit.get("log")
+            if isinstance(change_log, list) and change_log:
+                row = _add_section_header(ws, "Change Log (cell level)", row)
+                row += 1
+                log_keys = ["file", "row", "column", "old_value", "new_value", "reason", "auto_fixed"]
+                for col_idx, key in enumerate(log_keys, 1):
+                    ws.cell(row=row, column=col_idx, value=key.replace("_", " ").title())
+                _apply_header_style(ws, row, len(log_keys))
+                row += 1
+                first = row
+                for entry in change_log[:MAX_LOG_ROWS]:
+                    for col_idx, key in enumerate(log_keys, 1):
+                        _put(ws, row, col_idx, entry.get(key, ""))
+                    row += 1
+                _apply_body_style(ws, first, row - 1, len(log_keys))
+                if len(change_log) > MAX_LOG_ROWS:
+                    _put(ws, row, 1, f"... {len(change_log) - MAX_LOG_ROWS} more entries omitted.")
                     row += 1
                 row += 1
 
@@ -546,7 +609,7 @@ class WorkbookBuilder:
         for sheet in self.wb.sheetnames:
             ws = self.wb[sheet]
             last_row = ws.max_row + 2
-            cell = ws.cell(row=last_row, column=1, value="Generated by Quorum — Virtual Accounting & Analytics Firm")
+            cell = ws.cell(row=last_row, column=1, value="Generated by Verity Analytics — Virtual Accounting & Analytics Firm")
             cell.font = FOOTER_FONT
             ws.merge_cells(start_row=last_row, start_column=1, end_row=last_row, end_column=8)
 

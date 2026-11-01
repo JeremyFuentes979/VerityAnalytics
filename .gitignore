@@ -1,10 +1,19 @@
+# Dependencies and build output
 node_modules/
 dist/
-.snap/
-.tanstack/
-*.log
-team-site.pid
+.venv/
+venv/
 __pycache__/
 *.pyc
-venv/
+
+# Customer data and runtime files: never commit these
+sessions/
+site/.env
 .env
+*.log
+*.pid
+
+# Editor / OS
+.DS_Store
+.snap/
+.tanstack/

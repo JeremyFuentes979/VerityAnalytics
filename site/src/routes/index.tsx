@@ -1,5 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 
+import { PRICE_DISPLAY } from "../lib/config";
+
 export const Route = createFileRoute("/")({
   component: Home,
 });
@@ -44,7 +46,7 @@ function Home() {
             Your Financial Data, Scrutinized by a Full Firm — Not a Single Algorithm
           </h1>
           <p className="mx-auto mt-6 max-w-2xl text-lg leading-relaxed text-navy-200">
-            Quorum operates like a real accounting firm: a team of specialists works your data
+            Verity Analytics operates like a real accounting firm: a team of specialists works your data
             through a structured process of discovery, analysis, validation, and delivery.
             Every result includes a complete audit trail — so you can trust what you see.
           </p>
@@ -62,7 +64,7 @@ function Home() {
               Learn How It Works
             </a>
           </div>
-          <p className="mt-6 text-sm text-navy-400">Free preview. One-time $50 fee for full analysis. No subscription.</p>
+          <p className="mt-6 text-sm text-navy-300">Free preview. One-time {PRICE_DISPLAY} fee for full analysis. No subscription.</p>
         </div>
       </section>
 
@@ -75,7 +77,7 @@ function Home() {
               <p className="mt-1 text-sm text-navy-500">Specialist Agents</p>
             </div>
             <div className="border-x border-navy-100">
-              <p className="font-serif text-3xl font-bold text-navy">$50</p>
+              <p className="font-serif text-3xl font-bold text-navy">{PRICE_DISPLAY}</p>
               <p className="mt-1 text-sm text-navy-500">One-Time Fee</p>
             </div>
             <div>
@@ -129,13 +131,13 @@ function Home() {
       <section className="bg-navy-50 py-24">
         <div className="mx-auto max-w-3xl px-8 text-center">
           <span className="inline-block rounded-sm border border-navy-200 px-3 py-1 text-xs font-medium uppercase tracking-[0.15em] text-navy-500">
-            Why Quorum
+            Why Verity Analytics
           </span>
           <h2 className="mt-4 font-serif text-3xl font-bold text-navy sm:text-4xl">
             More Than a Spreadsheet Tool
           </h2>
           <p className="mx-auto mt-6 max-w-xl leading-relaxed text-navy-500">
-            Unlike single-pass chatbots or basic spreadsheet plugins, Quorum applies a genuine
+            Unlike single-pass chatbots or basic spreadsheet plugins, Verity Analytics applies a genuine
             multi-agent workflow. Each specialist works independently, findings are
             cross-validated, and every correction is logged. The result is financial analysis
             you can present to stakeholders, auditors, or your board.

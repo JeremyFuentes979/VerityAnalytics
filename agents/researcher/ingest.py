@@ -1,102 +1,166 @@
-import pandas as pd
+"""Researcher ingestion: read CSV / Excel / PDF into a DataFrame and profile it."""
+
+import csv
 import json
 import os
 import sys
-from datetime import datetime
+
+import pandas as pd
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+from _shared.jsonio import write_json  # noqa: E402
 
 try:
     import pdfplumber
     HAS_PDFPLUMBER = True
-except ImportError:
+except ImportError:  # pragma: no cover - depends on environment
     HAS_PDFPLUMBER = False
 
 
+class IngestError(Exception):
+    """Raised with a message that is safe to show to the customer."""
+
+
+def read_csv_robust(file_path):
+    """Read a CSV, tolerating odd encodings and delimiters."""
+    last_error = None
+    for encoding in ("utf-8-sig", "cp1252", "latin-1"):
+        try:
+            df = pd.read_csv(file_path, sep=None, engine="python", encoding=encoding)
+            return df
+        except UnicodeDecodeError as exc:
+            last_error = exc
+            continue
+        except pd.errors.EmptyDataError:
+            raise IngestError("The file is empty.")
+        except (pd.errors.ParserError, csv.Error):
+            # delimiter sniffing failed; fall back to plain comma-separated
+            try:
+                return pd.read_csv(file_path, encoding=encoding)
+            except pd.errors.EmptyDataError:
+                raise IngestError("The file is empty.")
+            except Exception as exc:  # noqa: BLE001
+                raise IngestError(f"Could not parse the CSV file: {exc}")
+    raise IngestError(f"Could not decode the file's text encoding: {last_error}")
+
+
 def ingest_pdf(file_path):
-    """Extract text from a PDF and return a DataFrame with a single 'text' column per page."""
+    """Extract text and tables from a PDF into a DataFrame."""
     if not HAS_PDFPLUMBER:
-        return {"error": "pdfplumber is not installed. Run: pip install pdfplumber"}
-    
+        raise IngestError("PDF support is not installed on this server (pdfplumber).")
+
     rows = []
-    with pdfplumber.open(file_path) as pdf:
-        for i, page in enumerate(pdf.pages):
-            text = page.extract_text() or ""
-            rows.append({"page": i + 1, "text": text.strip()})
-            # Try to extract tables if present
-            tables = page.extract_tables()
-            for t_idx, table in enumerate(tables):
-                if table:
-                    headers = table[0] if len(table) > 0 else []
+    try:
+        with pdfplumber.open(file_path) as pdf:
+            for i, page in enumerate(pdf.pages):
+                text = page.extract_text() or ""
+                rows.append({"page": i + 1, "text": text.strip()})
+                for t_idx, table in enumerate(page.extract_tables()):
+                    if not table:
+                        continue
+                    headers = [str(h) if h is not None else "" for h in table[0]]
                     for r_idx, row in enumerate(table[1:], 1):
                         record = {"page": i + 1, "table": t_idx + 1, "row": r_idx}
                         for h_idx, cell in enumerate(row):
-                            col_name = headers[h_idx] if h_idx < len(headers) else f"col_{h_idx}"
-                            record[col_name] = cell
+                            name = headers[h_idx] if h_idx < len(headers) and headers[h_idx] else f"col_{h_idx}"
+                            record[name] = cell
                         rows.append(record)
-    
+    except Exception as exc:  # noqa: BLE001
+        raise IngestError(f"Could not read the PDF: {exc}")
+
     if not rows:
-        rows.append({"page": 1, "text": "(empty PDF)"})
-    
-    df = pd.DataFrame(rows)
-    return df
+        raise IngestError("The PDF has no pages.")
+    return pd.DataFrame(rows)
+
+
+def read_any(file_path):
+    """Return (DataFrame, extension) for a supported file."""
+    ext = os.path.splitext(file_path)[1].lower()
+    if ext == ".csv":
+        df = read_csv_robust(file_path)
+    elif ext in (".xlsx", ".xls"):
+        try:
+            df = pd.read_excel(file_path)
+        except Exception as exc:  # noqa: BLE001
+            raise IngestError(f"Could not read the Excel file: {exc}")
+    elif ext == ".pdf":
+        df = ingest_pdf(file_path)
+    else:
+        raise IngestError(f"Unsupported file type: {ext or 'unknown'}")
+
+    df.columns = [str(c).strip() if str(c).strip() else f"column_{i}" for i, c in enumerate(df.columns)]
+    return df, ext
+
 
 def profile_dataframe(df):
     profile = {
-        "row_count": len(df),
-        "column_count": len(df.columns),
-        "columns": {}
+        "row_count": int(len(df)),
+        "column_count": int(len(df.columns)),
+        "columns": {},
     }
 
     for col in df.columns:
         col_data = df[col]
-        dtype = str(col_data.dtype)
         null_count = int(col_data.isnull().sum())
         null_percentage = (null_count / len(df)) * 100 if len(df) > 0 else 0
-        unique_count = int(col_data.nunique())
-
         stats = {
-            "dtype": dtype,
+            "dtype": str(col_data.dtype),
             "null_count": null_count,
             "null_percentage": round(null_percentage, 2),
-            "unique_count": unique_count
+            "unique_count": int(col_data.nunique()),
         }
 
-        if pd.api.types.is_numeric_dtype(col_data):
-            stats.update({
-                "min": float(col_data.min()) if not col_data.empty else None,
-                "max": float(col_data.max()) if not col_data.empty else None,
-                "mean": float(col_data.mean()) if not col_data.empty else None,
-                "median": float(col_data.median()) if not col_data.empty else None,
-                "std": float(col_data.std()) if not col_data.empty else None
-            })
+        if pd.api.types.is_numeric_dtype(col_data) and not pd.api.types.is_bool_dtype(col_data):
+            non_null = col_data.dropna()
+            if len(non_null):
+                stats.update({
+                    "min": float(non_null.min()),
+                    "max": float(non_null.max()),
+                    "mean": float(non_null.mean()),
+                    "median": float(non_null.median()),
+                    "std": float(non_null.std()) if len(non_null) > 1 else None,
+                })
         else:
-            # Categorical or other
             top_values = col_data.value_counts().head(5).to_dict()
             stats["top_values"] = {str(k): int(v) for k, v in top_values.items()}
 
         profile["columns"][col] = stats
 
+    profile["missing_count"] = int(df.isnull().sum().sum())
+    profile["duplicate_rows"] = int(df.duplicated().sum())
     return profile
 
+
+def build_warnings(profile):
+    """Human-readable notes shown in the free preview."""
+    warnings = []
+    if profile["row_count"] == 0:
+        warnings.append("The file has column headers but no data rows.")
+    if profile["column_count"] == 1:
+        warnings.append("Only one column was detected. The file may use an unusual delimiter.")
+    if profile["duplicate_rows"]:
+        warnings.append(f"{profile['duplicate_rows']:,} fully duplicated row(s) detected.")
+    for name, stats in profile["columns"].items():
+        if stats["null_percentage"] >= 50:
+            warnings.append(f"Column '{name}' is {stats['null_percentage']:.0f}% empty.")
+        elif stats["null_percentage"] >= 10:
+            warnings.append(f"Column '{name}' has {stats['null_percentage']:.0f}% missing values.")
+    return warnings[:25]
+
+
 def ingest_file(file_path):
-    ext = os.path.splitext(file_path)[1].lower()
+    """Back-compat wrapper returning a status dict."""
     try:
-        if ext == '.csv':
-            df = pd.read_csv(file_path)
-        elif ext in ['.xlsx', '.xls']:
-            df = pd.read_excel(file_path)
-        elif ext == '.pdf':
-            result = ingest_pdf(file_path)
-            if isinstance(result, dict) and "error" in result:
-                return result
-            df = result
-        else:
-            return {"error": f"Unsupported file extension: {ext}"}
-        
+        df, ext = read_any(file_path)
         profile = profile_dataframe(df)
         profile["source_type"] = ext
-        return {"status": "success", "profile": profile, "file_path": file_path}
-    except Exception as e:
-        return {"status": "error", "message": str(e)}
+        profile["warnings"] = build_warnings(profile)
+        return {"status": "success", "profile": profile, "file_path": file_path, "dataframe": df}
+    except IngestError as exc:
+        return {"status": "error", "message": str(exc), "file_path": file_path}
+    except Exception as exc:  # noqa: BLE001
+        return {"status": "error", "message": f"Unexpected error while reading the file: {exc}", "file_path": file_path}
+
 
 def main():
     if len(sys.argv) < 2:
@@ -104,31 +168,26 @@ def main():
         sys.exit(1)
 
     input_path = sys.argv[1]
-    output_dir = sys.argv[2] if len(sys.argv) > 2 else os.path.dirname(input_path)
+    output_dir = sys.argv[2] if len(sys.argv) > 2 else os.path.dirname(os.path.abspath(input_path))
+    os.makedirs(output_dir, exist_ok=True)
 
-    if not os.path.exists(output_dir):
-        os.makedirs(output_dir)
-
-    results = []
+    paths = []
     if os.path.isdir(input_path):
-        for f in os.listdir(input_path):
-            if f.endswith(('.csv', '.xlsx', '.xls', '.pdf')):
-                full_path = os.path.join(input_path, f)
-                print(f"Processing {full_path}...")
-                results.append(ingest_file(full_path))
+        paths = [os.path.join(input_path, f) for f in sorted(os.listdir(input_path))
+                 if f.lower().endswith((".csv", ".xlsx", ".xls", ".pdf"))]
     else:
-        print(f"Processing {input_path}...")
-        results.append(ingest_file(input_path))
+        paths = [input_path]
 
-    for res in results:
-        if res.get("status") == "success":
-            base_name = os.path.basename(res["file_path"])
-            output_file = os.path.join(output_dir, f"{base_name}_profile.json")
-            with open(output_file, 'w') as f:
-                json.dump(res["profile"], f, indent=2)
-            print(f"Profile saved to {output_file}")
+    for path in paths:
+        print(f"Processing {path}...")
+        res = ingest_file(path)
+        if res["status"] == "success":
+            out = os.path.join(output_dir, f"{os.path.basename(path)}_profile.json")
+            write_json(out, res["profile"])
+            print(f"Profile saved to {out}")
         else:
-            print(f"Error processing {res.get('file_path', 'unknown')}: {res.get('message')}")
+            print(f"Error processing {path}: {res['message']}")
+
 
 if __name__ == "__main__":
     main()

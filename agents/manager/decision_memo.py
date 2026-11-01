@@ -7,7 +7,7 @@ from Analyst, Auditor, and the Manager's conflict resolution.
 import json
 import os
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 
 logger = logging.getLogger("manager.decision_memo")
 
@@ -34,21 +34,21 @@ class DecisionMemo:
 
     def _build_header(self):
         self.memo["memo_header"] = {
-            "title": "Quorum Financial Analysis — Decision Memo",
-            "generated_at": datetime.utcnow().isoformat() + "Z",
-            "prepared_by": "Quorum Manager Agent",
+            "title": "Verity Analytics — Decision Memo",
+            "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "prepared_by": "Verity Analytics Manager Agent",
             "document_type": "Final Decision Memorandum",
-            "status": "Approved",
+            "status": "Delivered for your review",
         }
 
     def _build_executive_summary(self):
         resolution_count = self.conflict_result.get("summary", {}).get("resolutions_count", 0)
         self.memo["executive_summary"] = (
-            f"This memo summarizes the findings from Quorum's multi-agent analysis. "
+            f"This memo summarizes the findings from Verity Analytics' multi-agent analysis. "
             f"The Analyst performed exploratory data analysis and pattern detection. "
             f"The Auditor validated data quality, cleaned inconsistencies, and maintained an audit trail. "
             f"The Manager adjudicated {resolution_count} findings and resolved any conflicts between the two agents. "
-            f"The result is a verified, cleaned dataset ready for financial decision-making."
+            f"The result is a cleaned dataset with a complete audit trail, ready for your review before it is used in financial decisions."
         )
 
     def _build_data_profile_section(self):
@@ -113,7 +113,7 @@ class DecisionMemo:
             "recommendation": (
                 f"The data has been through a full multi-agent review. "
                 f"{confirmed_count} findings were cross-confirmed by both Analyst and Auditor. "
-                f"The cleaned dataset is ready for downstream financial analysis and reporting."
+                f"Review the flagged items (missing values, negative amounts, outliers) before using the cleaned dataset for reporting."
             ),
         })
 
@@ -129,9 +129,9 @@ class DecisionMemo:
                 "4. Manager: Conflict resolution, decision memo, final workbook generation"
             ),
             "disclaimer": (
-                "This analysis was produced by automated AI agents. "
-                "All findings should be reviewed by a qualified financial professional "
-                "before being used for material business decisions."
+                "This analysis was produced by automated software agents. It is not an audit, "
+                "attestation, tax advice or legal advice. All findings should be reviewed by a "
+                "qualified financial professional before being used for material business decisions."
             ),
         }
 
